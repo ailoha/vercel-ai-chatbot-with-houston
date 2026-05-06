@@ -42,7 +42,6 @@ function TextFilePreview({ file }: { file: File }) {
 }
 
 export function ChatInterface() {
-  const previousResponseIdRef = useRef<string | null>(null);
   const houstonRef = useRef<HoustonHandle | null>(null);
   const messagesEndRef = useRef<HTMLLIElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -59,29 +58,21 @@ export function ChatInterface() {
     isLoading,
     stop,
   } = useChat({
-    experimental_prepareRequestBody: ({ messages, requestBody }) => ({
-      messages: previousResponseIdRef.current
-        ? messages.slice(-1)
-        : messages,
-      ...((requestBody ?? {}) as Record<string, unknown>),
-    }),
-    onError: () => {
+    onError: (error) => {
       houstonRef.current?.setConnectionState("error");
-      toast.error("请求过于频繁，请稍后再试！");
+      const raw = (error?.message ?? "").trim();
+      // The default mask from createDataStreamResponse is "An error
+      // occurred." — fall back to a generic Chinese message in that case.
+      const isMasked =
+        raw.length === 0 ||
+        raw === "An error occurred." ||
+        raw === "An error occurred";
+      toast.error(isMasked ? "请求失败，请稍后重试" : `请求失败：${raw}`);
     },
     onResponse: () => {
       houstonRef.current?.setConnectionState("streaming");
     },
-    onFinish: (message) => {
-      const annotations = message.annotations as
-        | Array<{ responseId?: string } | null | undefined>
-        | undefined;
-      const responseId = annotations
-        ?.map((a) => a?.responseId)
-        .find((id): id is string => typeof id === "string" && id.length > 0);
-      if (responseId) {
-        previousResponseIdRef.current = responseId;
-      }
+    onFinish: () => {
       houstonRef.current?.setConnectionState("done");
     },
   });
@@ -181,10 +172,7 @@ export function ChatInterface() {
     }
     houstonRef.current?.setConnectionState("connecting");
     handleSubmit(event, {
-      body: {
-        thinking: thinkingEnabled,
-        previousResponseId: previousResponseIdRef.current,
-      },
+      body: { thinking: thinkingEnabled },
       ...(files ? { experimental_attachments: files } : {}),
     });
     setFiles(null);
