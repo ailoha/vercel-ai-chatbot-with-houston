@@ -557,7 +557,11 @@ a {
 
 @media (max-width: 640px) {
   .autogrow > textarea {
-    border-radius: 0;
+    /* Only round the top corners and drop the bottom border so the
+       textarea sits flush against the screen edge — same behaviour as
+       the original `chatgpt-with-houston`. Without this the bottom
+       corners would peek above the bottom of the viewport. */
+    border-radius: 12px 12px 0 0;
     margin-bottom: 0;
     border-bottom: 0;
   }
