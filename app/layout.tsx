@@ -6,7 +6,7 @@ import { LoginGate } from "@/components/LoginGate";
 import { isAuthed } from "@/lib/auth";
 
 export const metadata: Metadata = {
-  title: "ChatGPT with HoustonAI",
+  title: "Vercel AI Chatbot with HoustonAI",
   description:
     "Vercel AI Chatbot wearing the HoustonAI face — multimodal chat with attachments and Thinking mode.",
   icons: {
@@ -15,7 +15,7 @@ export const metadata: Metadata = {
   },
   manifest: "/manifest.json",
   openGraph: {
-    title: "ChatGPT with HoustonAI",
+    title: "Vercel AI Chatbot with HoustonAI",
     description:
       "Vercel AI Chatbot wearing the HoustonAI face — multimodal chat with attachments and Thinking mode.",
     images: ["/social.jpg"],

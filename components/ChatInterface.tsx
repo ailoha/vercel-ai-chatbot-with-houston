@@ -244,7 +244,7 @@ export function ChatInterface() {
       </a>
       <a
         className="houston-corner houston-corner-right"
-        href="https://github.com/vercel/ai-chatbot"
+        href="https://github.com/ailoha/vercel-ai-chatbot-with-houston"
         target="_blank"
         rel="noopener noreferrer"
         aria-label="GitHub"
