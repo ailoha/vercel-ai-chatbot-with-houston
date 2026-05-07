@@ -288,6 +288,84 @@ a {
   background: none;
 }
 
+/* ---------------- Streamdown code blocks ----------------
+   Streamdown wraps every fenced code block in
+   <div data-streamdown="code-block">
+     <div data-streamdown="code-block-header"> language + copy/download </div>
+     <pre data-streamdown="code-block-body">…</pre>
+   </div>
+   Style the wrapper edge-to-edge in the bubble, with a translucent
+   dark overlay that lets the bubble's gradient show through, and
+   force the <pre>'s Shiki-applied inline background to be transparent
+   so we get one consistent surface across header + body.
+*/
+.chat .message [data-streamdown="code-block"] {
+  margin: 1rem -1.5rem;
+  width: calc(100% + 3rem);
+  max-width: calc(100% + 3rem);
+  border: 0;
+  border-radius: 0;
+  overflow: hidden;
+  background: rgba(13, 0, 21, 0.55);
+}
+
+.chat .message [data-streamdown="code-block-header"] {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.45rem 1.25rem;
+  background: rgba(0, 0, 0, 0.25);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  color: rgba(255, 255, 255, 0.55);
+  font-size: 0.7rem;
+  font-family: "geist mono", "MD IO 0.5", ui-monospace, SFMono-Regular,
+    Menlo, monospace;
+  letter-spacing: 0.02em;
+}
+
+.chat .message [data-streamdown="code-block-copy-button"],
+.chat .message [data-streamdown="code-block-download-button"] {
+  background: transparent;
+  border: 0;
+  padding: 0.25rem;
+  margin: 0;
+  width: auto;
+  height: auto;
+  color: rgba(255, 255, 255, 0.5);
+  cursor: pointer;
+  border-radius: 4px;
+  display: inline-flex;
+  align-items: center;
+  transition: color 150ms, background 150ms;
+}
+.chat .message [data-streamdown="code-block-copy-button"]:hover,
+.chat .message [data-streamdown="code-block-download-button"]:hover {
+  color: white;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.chat .message [data-streamdown="code-block-body"] {
+  background: transparent !important;
+  margin: 0 !important;
+  padding: 0.875rem 1.25rem !important;
+  max-width: 100% !important;
+  border-radius: 0;
+  font-family: "geist mono", "MD IO 0.5", ui-monospace, SFMono-Regular,
+    Menlo, monospace;
+  font-size: 0.85rem;
+  line-height: 1.55;
+  overflow-x: auto;
+}
+
+/* Streamdown prepends each line with a counter via a ::before
+   pseudo-element. The original chatgpt-with-houston had no line
+   numbers, so hide them for visual parity. */
+.chat .message [data-streamdown="code-block-body"] code > span::before {
+  content: none !important;
+  display: none !important;
+  margin: 0 !important;
+}
+
 .message-thinking {
   color: rgba(255, 255, 255, 0.55);
   background: transparent !important;
