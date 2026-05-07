@@ -234,7 +234,6 @@ a {
   background: linear-gradient(83.21deg, #3245ff 0%, #bc52ee 100%);
   border-bottom-right-radius: 0;
   color: white;
-  margin-right: 1.25rem;
 }
 .chat > .message[data-user]::after {
   right: calc(var(--size) * -1);
@@ -251,7 +250,6 @@ a {
   border-bottom-left-radius: 0;
   grid-column: 1 / -1;
   color: white;
-  margin-left: 1.25rem;
 }
 .chat > .message:not([data-user])::after {
   border-top-left-radius: var(--size);
