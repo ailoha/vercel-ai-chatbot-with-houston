@@ -359,7 +359,7 @@ a {
   width: 100%;
   max-width: var(--container-width);
   margin: 0 auto;
-  padding: 0 1rem 0.75rem;
+  padding: 0 0 0.75rem;
   flex: 0 0 auto;
   box-shadow: 0 0 40px 2px #17191e;
 }
@@ -371,7 +371,6 @@ a {
 .autogrow {
   position: relative;
   display: grid;
-  padding-left: 1px;
 }
 .autogrow > textarea {
   resize: none;
@@ -391,8 +390,6 @@ a {
   border-radius: 12px;
   background: #23262d;
   color: #bfc1c9;
-  margin-left: -1px;
-  margin-right: -1px;
   margin-bottom: 0.75rem;
   grid-area: 1 / 1 / 2 / 2;
   transition: border-color 150ms, box-shadow 150ms;
