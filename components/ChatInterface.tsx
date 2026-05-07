@@ -2,8 +2,17 @@
 "use client";
 
 import { useChat } from "ai/react";
+import type { Message } from "ai";
 import { AnimatePresence, motion } from "framer-motion";
-import { DragEvent, useEffect, useRef, useState } from "react";
+import {
+  DragEvent,
+  memo,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { toast } from "sonner";
 import { Streamdown } from "streamdown";
 import Houston, { HoustonHandle } from "@/components/Houston";
@@ -17,21 +26,23 @@ import {
   SparklesIcon,
   StopIcon,
 } from "@/components/icons";
-
-const getTextFromDataUrl = (dataUrl: string) => {
-  const base64 = dataUrl.split(",")[1];
-  return window.atob(base64);
-};
+import { acceptFiles, getTextFromDataUrl } from "@/lib/attachments";
 
 function TextFilePreview({ file }: { file: File }) {
   const [content, setContent] = useState<string>("");
   useEffect(() => {
     const reader = new FileReader();
+    let cancelled = false;
     reader.onload = (e) => {
+      if (cancelled) return;
       const text = e.target?.result;
       setContent(typeof text === "string" ? text.slice(0, 100) : "");
     };
     reader.readAsText(file);
+    return () => {
+      cancelled = true;
+      reader.abort();
+    };
   }, [file]);
   return (
     <div>
@@ -41,10 +52,90 @@ function TextFilePreview({ file }: { file: File }) {
   );
 }
 
+// One text-attachment block: decode base64 once per unique data URL.
+const TextAttachmentBlock = memo(function TextAttachmentBlock({
+  url,
+}: {
+  url: string;
+}) {
+  const text = useMemo(() => getTextFromDataUrl(url), [url]);
+  return <div className="attachment-text">{text}</div>;
+});
+
+// One chat bubble. Memoized so streaming a token only re-renders the
+// last (assistant) message — prior turns keep their React subtree
+// untouched, which is the difference between O(N) markdown re-parses
+// per token and O(1).
+type MessageItemProps = { message: Message };
+const MessageItem = memo(function MessageItem({ message }: MessageItemProps) {
+  return (
+    <li
+      className="message"
+      data-user={message.role === "user" ? "" : undefined}
+    >
+      <div className="message-body">
+        {message.parts && message.parts.length > 0 ? (
+          message.parts.map((part, i) => {
+            if (part.type === "reasoning") {
+              return (
+                <div key={i} className="reasoning-block">
+                  <div className="reasoning-label">
+                    <SparklesIcon />
+                    <span>思考过程</span>
+                  </div>
+                  <Streamdown>{part.reasoning}</Streamdown>
+                </div>
+              );
+            }
+            if (part.type === "text") {
+              return <Streamdown key={i}>{part.text}</Streamdown>;
+            }
+            return null;
+          })
+        ) : (
+          <Streamdown>{message.content}</Streamdown>
+        )}
+      </div>
+
+      {message.experimental_attachments &&
+        message.experimental_attachments.length > 0 && (
+          <div className="attachments">
+            {message.experimental_attachments.map((attachment) => {
+              if (attachment.contentType?.startsWith("image")) {
+                return (
+                  <img
+                    className="attachment-image"
+                    key={attachment.name}
+                    src={attachment.url}
+                    alt={attachment.name ?? "attachment"}
+                  />
+                );
+              }
+              if (attachment.contentType?.startsWith("text")) {
+                return (
+                  <TextAttachmentBlock
+                    key={attachment.name}
+                    url={attachment.url}
+                  />
+                );
+              }
+              return null;
+            })}
+          </div>
+        )}
+    </li>
+  );
+});
+
 export function ChatInterface() {
   const houstonRef = useRef<HoustonHandle | null>(null);
   const messagesEndRef = useRef<HTMLLIElement | null>(null);
+  const mainRef = useRef<HTMLElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  // True while the user is at (or near) the bottom of the chat. We only
+  // auto-scroll when this is true — otherwise the user is reading
+  // history and we must not yank them back.
+  const stickToBottomRef = useRef(true);
 
   const [files, setFiles] = useState<FileList | null>(null);
   const [isDragging, setIsDragging] = useState(false);
@@ -63,8 +154,6 @@ export function ChatInterface() {
     onError: (error) => {
       houstonRef.current?.setConnectionState("error");
       const raw = (error?.message ?? "").trim();
-      // The default mask from createDataStreamResponse is "An error
-      // occurred." — fall back to a generic Chinese message in that case.
       const isMasked =
         raw.length === 0 ||
         raw === "An error occurred." ||
@@ -116,32 +205,72 @@ export function ChatInterface() {
     }
   }, [isLoading]);
 
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  };
-
+  // Keep the "am I at the bottom?" flag fresh as the user scrolls.
   useEffect(() => {
-    scrollToBottom();
+    const el = mainRef.current;
+    if (!el) return;
+    const onScroll = () => {
+      const dist = el.scrollHeight - el.scrollTop - el.clientHeight;
+      stickToBottomRef.current = dist < 80;
+    };
+    el.addEventListener("scroll", onScroll, { passive: true });
+    return () => el.removeEventListener("scroll", onScroll);
+  }, []);
+
+  // Auto-scroll, but only if the user is sitting at the bottom. Use
+  // instant scroll instead of smooth so rapid streaming tokens don't
+  // stack overlapping animations.
+  useEffect(() => {
+    if (!stickToBottomRef.current) return;
+    messagesEndRef.current?.scrollIntoView({ behavior: "auto", block: "end" });
   }, [messages]);
+
+  // Object URLs for the staged attachment preview. Created once per
+  // file batch, revoked when the batch changes or the component
+  // unmounts — fixes the per-keystroke leak that happens if you call
+  // URL.createObjectURL inline inside JSX.
+  const previewUrls = useMemo(() => {
+    if (!files) return [] as { file: File; url: string | null }[];
+    return Array.from(files).map((file) => ({
+      file,
+      url: file.type.startsWith("image") ? URL.createObjectURL(file) : null,
+    }));
+  }, [files]);
+  useEffect(() => {
+    return () => {
+      previewUrls.forEach(({ url }) => {
+        if (url) URL.revokeObjectURL(url);
+      });
+    };
+  }, [previewUrls]);
+
+  // The single accept pipeline used by paste / drop / file picker.
+  // Does type, count, size, and total-size validation, plus image
+  // downscaling. Rejected files surface in a single toast with their
+  // individual reasons; accepted files replace the staged batch.
+  const acceptAndStage = useCallback(async (raw: File[]) => {
+    if (raw.length === 0) return;
+    const { ok, rejected } = await acceptFiles(raw);
+    if (rejected.length > 0) {
+      const detail = rejected
+        .map((r) => `${r.name}（${r.reason}）`)
+        .join("；");
+      toast.error(`部分文件未添加：${detail}`);
+    }
+    if (ok.length === 0) return;
+    const dt = new DataTransfer();
+    ok.forEach((f) => dt.items.add(f));
+    setFiles(dt.files);
+  }, []);
 
   const handlePaste = (event: React.ClipboardEvent) => {
     const items = event.clipboardData?.items;
     if (!items) return;
-    const pastedFiles = Array.from(items)
+    const pasted = Array.from(items)
       .map((item) => item.getAsFile())
       .filter((file): file is File => file !== null);
-    if (pastedFiles.length === 0) return;
-    const validFiles = pastedFiles.filter(
-      (file) =>
-        file.type.startsWith("image/") || file.type.startsWith("text/")
-    );
-    if (validFiles.length === pastedFiles.length) {
-      const dataTransfer = new DataTransfer();
-      validFiles.forEach((file) => dataTransfer.items.add(file));
-      setFiles(dataTransfer.files);
-    } else {
-      toast.error("仅支持图片和文本文件");
-    }
+    if (pasted.length === 0) return;
+    void acceptAndStage(pasted);
   };
 
   const handleDragOver = (event: DragEvent<HTMLDivElement>) => {
@@ -154,40 +283,20 @@ export function ChatInterface() {
   };
   const handleDrop = (event: DragEvent<HTMLDivElement>) => {
     event.preventDefault();
-    const droppedFiles = event.dataTransfer.files;
-    const droppedFilesArray = Array.from(droppedFiles);
-    if (droppedFilesArray.length > 0) {
-      const validFiles = droppedFilesArray.filter(
-        (file) =>
-          file.type.startsWith("image/") || file.type.startsWith("text/")
-      );
-      if (validFiles.length === droppedFilesArray.length) {
-        const dataTransfer = new DataTransfer();
-        validFiles.forEach((file) => dataTransfer.items.add(file));
-        setFiles(dataTransfer.files);
-      } else {
-        toast.error("仅支持图片和文本文件！");
-      }
-    }
+    const dropped = Array.from(event.dataTransfer.files);
+    if (dropped.length > 0) void acceptAndStage(dropped);
     setIsDragging(false);
   };
 
   const handleUploadClick = () => fileInputRef.current?.click();
 
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const selectedFiles = event.target.files;
-    if (!selectedFiles) return;
-    const validFiles = Array.from(selectedFiles).filter(
-      (file) =>
-        file.type.startsWith("image/") || file.type.startsWith("text/")
-    );
-    if (validFiles.length === selectedFiles.length) {
-      const dataTransfer = new DataTransfer();
-      validFiles.forEach((file) => dataTransfer.items.add(file));
-      setFiles(dataTransfer.files);
-    } else {
-      toast.error("仅支持图片和文本文件");
+    const sel = event.target.files;
+    if (sel && sel.length > 0) {
+      void acceptAndStage(Array.from(sel));
     }
+    // Reset so the same file can be picked again after removal.
+    event.target.value = "";
   };
 
   const onFormSubmit = (event: React.FormEvent<HTMLFormElement>) => {
@@ -195,6 +304,10 @@ export function ChatInterface() {
       event.preventDefault();
       return;
     }
+    // The user just hit send — they expect to see their own message
+    // and the streaming reply. Force-reattach to the bottom regardless
+    // of where they were scrolled.
+    stickToBottomRef.current = true;
     houstonRef.current?.setConnectionState("connecting");
     handleSubmit(event, {
       body: { thinking: thinkingEnabled },
@@ -282,61 +395,10 @@ export function ChatInterface() {
         </div>
       </header>
 
-      <main className="houston-main">
+      <main className="houston-main" ref={mainRef}>
         <ul className="chat">
           {messages.map((message) => (
-            <li
-              key={message.id}
-              className="message"
-              data-user={message.role === "user" ? "" : undefined}
-            >
-              <div className="message-body">
-                {message.parts && message.parts.length > 0 ? (
-                  message.parts.map((part, i) => {
-                    if (part.type === "reasoning") {
-                      return (
-                        <div key={i} className="reasoning-block">
-                          <div className="reasoning-label">
-                            <SparklesIcon />
-                            <span>思考过程</span>
-                          </div>
-                          <Streamdown>{part.reasoning}</Streamdown>
-                        </div>
-                      );
-                    }
-                    if (part.type === "text") {
-                      return <Streamdown key={i}>{part.text}</Streamdown>;
-                    }
-                    return null;
-                  })
-                ) : (
-                  <Streamdown>{message.content}</Streamdown>
-                )}
-              </div>
-
-              {message.experimental_attachments &&
-                message.experimental_attachments.length > 0 && (
-                  <div className="attachments">
-                    {message.experimental_attachments.map((attachment) =>
-                      attachment.contentType?.startsWith("image") ? (
-                        <img
-                          className="attachment-image"
-                          key={attachment.name}
-                          src={attachment.url}
-                          alt={attachment.name ?? "attachment"}
-                        />
-                      ) : attachment.contentType?.startsWith("text") ? (
-                        <div
-                          key={attachment.name}
-                          className="attachment-text"
-                        >
-                          {getTextFromDataUrl(attachment.url)}
-                        </div>
-                      ) : null
-                    )}
-                  </div>
-                )}
-            </li>
+            <MessageItem key={message.id} message={message} />
           ))}
 
           {isLoading &&
@@ -359,11 +421,11 @@ export function ChatInterface() {
           <AnimatePresence>
             {files && files.length > 0 && (
               <div className="attachment-preview">
-                {Array.from(files).map((file) =>
-                  file.type.startsWith("image") ? (
+                {previewUrls.map(({ file, url }) =>
+                  url ? (
                     <motion.img
                       key={file.name}
-                      src={URL.createObjectURL(file)}
+                      src={url}
                       alt={file.name}
                       className="attachment-preview-image"
                       initial={{ scale: 0.8, opacity: 0 }}
