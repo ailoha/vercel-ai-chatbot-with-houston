@@ -294,10 +294,9 @@ a {
      <div data-streamdown="code-block-header"> language + copy/download </div>
      <pre data-streamdown="code-block-body">…</pre>
    </div>
-   Style the wrapper edge-to-edge in the bubble, with a translucent
-   dark overlay that lets the bubble's gradient show through, and
-   force the <pre>'s Shiki-applied inline background to be transparent
-   so we get one consistent surface across header + body.
+   Style the wrapper edge-to-edge in the bubble with the same dark
+   overlay used by the original Houston chat. Header and body stay
+   transparent so the surface reads as one continuous block.
 */
 .chat .message [data-streamdown="code-block"] {
   margin: 1rem -1.5rem;
@@ -306,21 +305,25 @@ a {
   border: 0;
   border-radius: 0;
   overflow: hidden;
-  background: rgba(13, 0, 21, 0.55);
+  background: rgba(13, 0, 21, 0.8);
 }
 
 .chat .message [data-streamdown="code-block-header"] {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0.45rem 1.25rem;
-  background: rgba(0, 0, 0, 0.25);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
-  color: rgba(255, 255, 255, 0.55);
+  padding: 0.65rem 1.5rem 0.25rem;
+  background: transparent;
+  border: 0 !important;
+  color: rgba(191, 193, 201, 0.7);
   font-size: 0.7rem;
-  font-family: "geist mono", "MD IO 0.5", ui-monospace, SFMono-Regular,
+  font-family: "MD IO 0.5", "geist mono", ui-monospace, SFMono-Regular,
     Menlo, monospace;
-  letter-spacing: 0.02em;
+  letter-spacing: 0;
+}
+
+.chat .message [data-streamdown="code-block-header"] > div {
+  gap: 0.45rem;
 }
 
 .chat .message [data-streamdown="code-block-copy-button"],
@@ -331,7 +334,7 @@ a {
   margin: 0;
   width: auto;
   height: auto;
-  color: rgba(255, 255, 255, 0.5);
+  color: rgba(190, 190, 200, 0.7);
   cursor: pointer;
   border-radius: 4px;
   display: inline-flex;
@@ -341,20 +344,25 @@ a {
 .chat .message [data-streamdown="code-block-copy-button"]:hover,
 .chat .message [data-streamdown="code-block-download-button"]:hover {
   color: white;
-  background: rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.1);
 }
 
 .chat .message [data-streamdown="code-block-body"] {
   background: transparent !important;
+  border: 0 !important;
   margin: 0 !important;
-  padding: 0.875rem 1.25rem !important;
+  padding: 0.85rem 1.5rem 1.35rem !important;
   max-width: 100% !important;
   border-radius: 0;
-  font-family: "geist mono", "MD IO 0.5", ui-monospace, SFMono-Regular,
+  font-family: "MD IO 0.5", "geist mono", ui-monospace, SFMono-Regular,
     Menlo, monospace;
-  font-size: 0.85rem;
+  font-size: 0.875rem;
   line-height: 1.55;
   overflow-x: auto;
+}
+
+.chat .message [data-streamdown="code-block-body"] code {
+  font-family: inherit;
 }
 
 /* Streamdown prepends each line with a counter via a ::before

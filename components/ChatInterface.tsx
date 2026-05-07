@@ -28,15 +28,15 @@ import {
 } from "@/components/icons";
 import { acceptFiles, getTextFromDataUrl } from "@/lib/attachments";
 
-// Shiki theme passed to <Streamdown> so highlighted code blocks pick up
-// a Houston-coordinated palette (hot-pink keywords, warm strings,
-// dim comments) instead of streamdown's default github-dark. Same theme
+// Shiki theme passed to <Streamdown> so highlighted code blocks match
+// the reference's One Dark-style palette: purple keywords, blue
+// functions, green strings, warm numbers, and dim comments. Same theme
 // for both light and dark slots so the look stays stable regardless of
 // the OS prefers-color-scheme.
 import type { ComponentProps } from "react";
 const SHIKI_THEME: NonNullable<ComponentProps<typeof Streamdown>["shikiTheme"]> = [
-  "monokai",
-  "monokai",
+  "one-dark-pro",
+  "one-dark-pro",
 ];
 
 function TextFilePreview({ file }: { file: File }) {
