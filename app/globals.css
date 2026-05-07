@@ -217,7 +217,6 @@ a {
   grid-column: span 6 / -1;
   padding: 1rem 1.5rem;
   animation: fade-in 300ms ease-out forwards;
-  margin-inline: 0.75rem;
 }
 
 .chat > .message::after {
@@ -543,6 +542,17 @@ a {
   margin: 0;
   padding: 0;
   line-height: 0;
+}
+
+@media (min-width: 640px) {
+  /* Desktop: user bubble shrinks to 5 of 6 grid columns and is
+     right-aligned so the layout matches the original
+     `chatgpt-with-houston`. The assistant bubble keeps its full-width
+     `grid-column: 1 / -1` thanks to the higher specificity of the
+     `:not([data-user])` rule above. */
+  .chat > .message {
+    grid-column: span 5 / -1;
+  }
 }
 
 @media (max-width: 640px) {
