@@ -52,7 +52,9 @@ export function ChatInterface() {
 
   const {
     messages,
+    setMessages,
     input,
+    setInput,
     handleInputChange,
     handleSubmit,
     isLoading,
@@ -68,6 +70,29 @@ export function ChatInterface() {
         raw === "An error occurred." ||
         raw === "An error occurred";
       toast.error(isMasked ? "请求失败，请稍后重试" : `请求失败：${raw}`);
+
+      // Drop the just-failed user turn so the same poisoned message
+      // (e.g. an attachment a non-VLM model rejects) is not re-sent on
+      // every subsequent submit. Restore its text so the user can edit
+      // and retry without retyping. Attachments are intentionally not
+      // re-attached because they are what the upstream rejected.
+      setMessages((prev) => {
+        if (prev.length === 0) return prev;
+        const last = prev[prev.length - 1];
+        if (last.role !== "user") return prev;
+        const restored =
+          typeof last.content === "string" && last.content.length > 0
+            ? last.content
+            : last.parts
+                ?.filter(
+                  (p): p is { type: "text"; text: string } =>
+                    p.type === "text"
+                )
+                .map((p) => p.text)
+                .join("") ?? "";
+        if (restored) setInput(restored);
+        return prev.slice(0, -1);
+      });
     },
     onResponse: () => {
       houstonRef.current?.setConnectionState("streaming");
