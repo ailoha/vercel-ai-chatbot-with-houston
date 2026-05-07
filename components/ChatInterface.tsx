@@ -28,6 +28,17 @@ import {
 } from "@/components/icons";
 import { acceptFiles, getTextFromDataUrl } from "@/lib/attachments";
 
+// Shiki theme passed to <Streamdown> so highlighted code blocks pick up
+// a Houston-coordinated palette (hot-pink keywords, warm strings,
+// dim comments) instead of streamdown's default github-dark. Same theme
+// for both light and dark slots so the look stays stable regardless of
+// the OS prefers-color-scheme.
+import type { ComponentProps } from "react";
+const SHIKI_THEME: NonNullable<ComponentProps<typeof Streamdown>["shikiTheme"]> = [
+  "monokai",
+  "monokai",
+];
+
 function TextFilePreview({ file }: { file: File }) {
   const [content, setContent] = useState<string>("");
   useEffect(() => {
@@ -83,17 +94,23 @@ const MessageItem = memo(function MessageItem({ message }: MessageItemProps) {
                     <SparklesIcon />
                     <span>思考过程</span>
                   </div>
-                  <Streamdown>{part.reasoning}</Streamdown>
+                  <Streamdown shikiTheme={SHIKI_THEME}>
+                    {part.reasoning}
+                  </Streamdown>
                 </div>
               );
             }
             if (part.type === "text") {
-              return <Streamdown key={i}>{part.text}</Streamdown>;
+              return (
+                <Streamdown key={i} shikiTheme={SHIKI_THEME}>
+                  {part.text}
+                </Streamdown>
+              );
             }
             return null;
           })
         ) : (
-          <Streamdown>{message.content}</Streamdown>
+          <Streamdown shikiTheme={SHIKI_THEME}>{message.content}</Streamdown>
         )}
       </div>
 
