@@ -561,7 +561,7 @@ a {
        textarea sits flush against the screen edge — same behaviour as
        the original `chatgpt-with-houston`. Without this the bottom
        corners would peek above the bottom of the viewport. */
-    border-radius: 12px 12px 0 0;
+    border-radius: 4px;
     margin-bottom: 0;
     border-bottom: 0;
   }
