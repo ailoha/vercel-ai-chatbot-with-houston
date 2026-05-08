@@ -22,32 +22,26 @@ export const metadata: Metadata = {
   },
 };
 
-export default async function RootLayout({
+export default function RootLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
-  const authed = await isAuthed();
+  const authed = isAuthed();
   return (
     <html lang="zh-CN">
       <body>
-        {authed ? (
-          <>
-            <Toaster
-              position="top-center"
-              richColors
-              theme="dark"
-              toastOptions={{
-                style: {
-                  background: "#23262d",
-                  border: "1px solid #343841",
-                  color: "#fff",
-                },
-              }}
-            />
-            {children}
-          </>
-        ) : (
-          <LoginGate />
-        )}
+        <Toaster
+          position="top-center"
+          richColors
+          theme="dark"
+          toastOptions={{
+            style: {
+              background: "#23262d",
+              border: "1px solid #343841",
+              color: "#fff",
+            },
+          }}
+        />
+        {authed ? children : <LoginGate />}
       </body>
     </html>
   );

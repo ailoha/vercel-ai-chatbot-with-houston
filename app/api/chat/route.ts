@@ -1,16 +1,10 @@
 import { createOpenAI } from "@ai-sdk/openai";
 import { createDataStreamResponse, streamText } from "ai";
 import type { JSONValue } from "ai";
-import { isAuthedFromCookieHeader } from "@/lib/auth";
+import { isAuthed } from "@/lib/auth";
 
-// Run on the Edge runtime: lower TTFB (no Node cold start), streaming
-// is the natural data shape, and no Node-only APIs are needed here.
-export const runtime = "edge";
-
-// Vercel Edge streaming budget. Hobby plan caps streamed responses at
-// ~30s, Pro at 300s. We default to a safe 60s; the upstream timeout
-// further down stops at 55s so we can always send a graceful error.
-export const maxDuration = 60;
+// Allow long-running streaming responses on Vercel.
+export const maxDuration = 120;
 
 const openai = createOpenAI({
   baseURL: process.env.OPENAI_BASE_URL,
@@ -95,7 +89,7 @@ function describeError(error: unknown): string {
 }
 
 export async function POST(req: Request) {
-  if (!isAuthedFromCookieHeader(req.headers.get("cookie"))) {
+  if (!isAuthed()) {
     return new Response("Unauthorized", { status: 401 });
   }
 
@@ -130,9 +124,9 @@ export async function POST(req: Request) {
     }
   }
 
-  // Default to 55s (under the 60s Edge maxDuration with 5s margin) so we
-  // always get to send a structured error before the platform kills us.
-  const upstreamTimeoutMs = Number(process.env.UPSTREAM_TIMEOUT_MS ?? 55_000);
+  const upstreamTimeoutMs = Number(
+    process.env.UPSTREAM_TIMEOUT_MS ?? 110_000
+  );
 
   return createDataStreamResponse({
     // Surface the real upstream error so the user can see why the request

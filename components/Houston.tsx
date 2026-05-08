@@ -81,21 +81,14 @@ const Houston = forwardRef<HoustonHandle, Props>(function Houston(
     const onResize = () => {
       rectRef.current = root.getBoundingClientRect();
     };
-    // Coalesce pointermove writes into one frame: the conic-gradient
-    // border is driven by --deg, so every setProperty triggers a paint.
-    // Without throttling a quick mouse pass over the mascot fires 100+
-    // paints per second.
-    let pmRaf = 0;
-    let pmEvent: PointerEvent | null = null;
-    const flushPointer = () => {
-      pmRaf = 0;
+    const onPointerMove = (event: PointerEvent) => {
       const rect = rectRef.current;
-      const ev = pmEvent;
-      pmEvent = null;
-      if (!rect || !ev) return;
-      const x = (ev.clientX - rect.x) / rect.width - 0.5;
-      const y = (ev.clientY - rect.y) / rect.height - 0.5;
-      const rad = Math.atan2(-y, -x);
+      if (!rect) return;
+      const x = (event.clientX - rect.x) / rect.width - 0.5;
+      const y = (event.clientY - rect.y) / rect.height - 0.5;
+      const deltaX = 0 - x;
+      const deltaY = 0 - y;
+      const rad = Math.atan2(deltaY, deltaX);
       let deg = rad * (180 / Math.PI);
       deg = deg < 0 ? Math.abs(deg) : deg;
 
@@ -106,21 +99,15 @@ const Houston = forwardRef<HoustonHandle, Props>(function Houston(
         `${lerp(0, -35, Math.abs(deg / 180))}deg`
       );
     };
-    const onPointerMove = (event: PointerEvent) => {
-      pmEvent = event;
-      if (pmRaf) return;
-      pmRaf = requestAnimationFrame(flushPointer);
-    };
 
     window.addEventListener("resize", onResize);
-    root.addEventListener("pointermove", onPointerMove, { passive: true });
+    root.addEventListener("pointermove", onPointerMove);
     // Apply initial pose shapes
     updateShapes(POSES[initialPose] ?? POSES.default);
 
     return () => {
       window.removeEventListener("resize", onResize);
       root.removeEventListener("pointermove", onPointerMove);
-      if (pmRaf) cancelAnimationFrame(pmRaf);
       if (emoteHandle.current) clearTimeout(emoteHandle.current);
       if (talkHandle.current) clearTimeout(talkHandle.current);
       if (stateHandle.current) clearTimeout(stateHandle.current);

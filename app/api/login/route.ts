@@ -21,7 +21,7 @@ export async function POST(req: Request) {
   const response = NextResponse.json({ ok: true });
   response.cookies.set({
     name: AUTH_COOKIE,
-    value: await hashPassword(expected),
+    value: hashPassword(expected),
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",
     sameSite: "lax",
