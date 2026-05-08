@@ -62,15 +62,21 @@ body {
 body::before {
   position: fixed;
   content: "";
-  mix-blend-mode: overlay;
-  opacity: 0.4;
+  /* Was mix-blend-mode: overlay on a 632KB PNG. mix-blend-mode forces the
+     compositor off the GPU fast path, so every paint above this layer
+     (chat scroll, Houston animation, streamed tokens) had to recomposite
+     a full-screen image. Plain alpha + a 256² WebP tile gives the same
+     grain look at 6% of the bytes and stays on the GPU fast path. */
+  opacity: 0.06;
   inset: 0;
   width: 100%;
   height: 100%;
-  background: url(/whitenoise.png);
+  background: url(/whitenoise.webp);
   background-repeat: repeat;
+  background-size: 256px 256px;
   pointer-events: none;
   z-index: 0;
+  will-change: auto;
 }
 
 code,

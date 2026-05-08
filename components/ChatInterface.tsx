@@ -28,6 +28,13 @@ import {
 } from "@/components/icons";
 import { acceptFiles, getTextFromDataUrl } from "@/lib/attachments";
 
+// Hoisted out of onKeyDown so we don't run a regex on every keystroke.
+const IS_MOBILE =
+  typeof navigator !== "undefined" &&
+  /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(
+    navigator.userAgent
+  );
+
 // Shiki theme passed to <Streamdown> so highlighted code blocks match
 // the reference's One Dark-style palette: purple keywords, blue
 // functions, green strings, warm numbers, and dim comments. Same theme
@@ -168,28 +175,63 @@ export function ChatInterface() {
     isLoading,
     stop,
   } = useChat({
+    // Coalesce streaming UI updates into ~50ms frames. This is the single
+    // largest perceived-speed win: instead of reconciling React + re-parsing
+    // markdown + re-running shiki on every token, we batch tokens into one
+    // render per frame. The model still streams at full speed; the UI just
+    // catches up at a sustainable rate.
+    experimental_throttle: 50,
+    // Strip data-URL attachments from older messages before re-sending the
+    // history. The model retains visual context through its prior textual
+    // reply; re-uploading a 2 MB image on every turn just bloats the
+    // request. The latest (just-submitted) user turn keeps its attachments.
+    experimental_prepareRequestBody: ({ messages: msgs }) => {
+      const lastIdx = msgs.length - 1;
+      return {
+        messages: msgs.map((m, i) =>
+          i === lastIdx
+            ? m
+            : m.experimental_attachments
+            ? { ...m, experimental_attachments: undefined }
+            : m
+        ),
+      };
+    },
     onError: (error) => {
       houstonRef.current?.setConnectionState("error");
       const raw = (error?.message ?? "").trim();
+      const isTimeout = /timeout|abort/i.test(raw);
       const isMasked =
         raw.length === 0 ||
         raw === "An error occurred." ||
         raw === "An error occurred";
-      toast.error(isMasked ? "请求失败，请稍后重试" : `请求失败：${raw}`);
+      const display = isTimeout
+        ? "请求超时，请稍后重试"
+        : isMasked
+        ? "请求失败，请稍后重试"
+        : `请求失败：${raw}`;
+      toast.error(display);
 
-      // Drop the just-failed user turn so the same poisoned message
-      // (e.g. an attachment a non-VLM model rejects) is not re-sent on
-      // every subsequent submit. Restore its text so the user can edit
-      // and retry without retyping. Attachments are intentionally not
-      // re-attached because they are what the upstream rejected.
+      // Roll back to the last completed turn: drop both the failed user
+      // submit AND any half-streamed assistant fragments after it. Restore
+      // the user text so they can edit & retry without retyping.
       setMessages((prev) => {
         if (prev.length === 0) return prev;
-        const last = prev[prev.length - 1];
-        if (last.role !== "user") return prev;
+        // Find the last user message; everything from there on is the
+        // failed turn (user + any partial assistant fragments).
+        let cut = -1;
+        for (let i = prev.length - 1; i >= 0; i--) {
+          if (prev[i].role === "user") {
+            cut = i;
+            break;
+          }
+        }
+        if (cut < 0) return prev;
+        const lastUser = prev[cut];
         const restored =
-          typeof last.content === "string" && last.content.length > 0
-            ? last.content
-            : last.parts
+          typeof lastUser.content === "string" && lastUser.content.length > 0
+            ? lastUser.content
+            : lastUser.parts
                 ?.filter(
                   (p): p is { type: "text"; text: string } =>
                     p.type === "text"
@@ -197,7 +239,7 @@ export function ChatInterface() {
                 .map((p) => p.text)
                 .join("") ?? "";
         if (restored) setInput(restored);
-        return prev.slice(0, -1);
+        return prev.slice(0, cut);
       });
     },
     onResponse: () => {
@@ -234,13 +276,29 @@ export function ChatInterface() {
     return () => el.removeEventListener("scroll", onScroll);
   }, []);
 
-  // Auto-scroll, but only if the user is sitting at the bottom. Use
-  // instant scroll instead of smooth so rapid streaming tokens don't
-  // stack overlapping animations.
+  // Auto-scroll, but only if the user is sitting at the bottom. Coalesce
+  // multiple streaming bursts into one scroll per animation frame so
+  // we don't trigger a synchronous layout per token.
+  const scrollRafRef = useRef<number | null>(null);
   useEffect(() => {
     if (!stickToBottomRef.current) return;
-    messagesEndRef.current?.scrollIntoView({ behavior: "auto", block: "end" });
+    if (scrollRafRef.current !== null) return;
+    scrollRafRef.current = requestAnimationFrame(() => {
+      scrollRafRef.current = null;
+      messagesEndRef.current?.scrollIntoView({
+        behavior: "auto",
+        block: "end",
+      });
+    });
   }, [messages]);
+  useEffect(
+    () => () => {
+      if (scrollRafRef.current !== null) {
+        cancelAnimationFrame(scrollRafRef.current);
+      }
+    },
+    []
+  );
 
   // Object URLs for the staged attachment preview. Created once per
   // file batch, revoked when the batch changes or the component
@@ -334,12 +392,7 @@ export function ChatInterface() {
   };
 
   const onKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    const isMobile =
-      typeof navigator !== "undefined" &&
-      /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(
-        navigator.userAgent
-      );
-    if (isMobile) return;
+    if (IS_MOBILE) return;
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
       e.currentTarget.form?.requestSubmit();
